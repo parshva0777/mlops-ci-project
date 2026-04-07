@@ -1,0 +1,46 @@
+name: MLops CI Pipeline
+
+on: [push]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python & Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3 python3-pip
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+
+      - name: Setup Node.js & Install CML
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt install -y nodejs
+          npm install -g @dvcorg/cml
+
+      - name: Train Model + Generate Report
+        env:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 model1.py
+          echo "## Model Metrics" > report.md
+          cat metrics.txt >> report.md
+          echo "## Model Graph" >> report.md
+          cml-publish model_results.png --md >> report.md
+          cml-send-comment report.md
+
+      - name: Start Flask API
+        run: |
+          nohup python3 app.py &
+          sleep 5
+
+      - name: Test API
+        run: |
+          curl -X POST http://127.0.0.1:5000/predict \
+          -H "Content-Type: application/json" \
+          -d '{"input":[5]}'
